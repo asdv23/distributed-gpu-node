@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+# local database and raw snapshots: hold host/machine IDs, never published
+data/
+*.db
+# secrets
+.env
+*.key
+*.token
