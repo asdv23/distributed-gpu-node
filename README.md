@@ -76,14 +76,16 @@ Collection runs from a deployment checkout that stays on `main` and is the only 
 checkout is a separate clone, run from its owner's crontab:
 
 ```cron
-11 * * * *  cd <checkout> && flock -n data/collector.lock sh -c 'python3 -m collectors.vast.collector; python3 -m analytics.market_report'
-41 2 * * *  cd <checkout> && flock -w 300 data/collector.lock scripts/publish_reports.sh   # once a day, after 00:00 UTC
+11 * * * *  cd <checkout> && mkdir -p data && flock -n data/collector.lock sh -c 'python3 -m collectors.vast.collector; python3 -m analytics.market_report'
+41 2 * * *  cd <checkout> && mkdir -p data && flock -w 300 data/collector.lock scripts/publish_reports.sh   # once a day, after 00:00 UTC
 ```
 
-`scripts/publish_reports.sh` fast-forwards to `origin/main` (so the deployment picks up merged
-code), commits the reports of finished UTC days and pushes them. To regenerate a past report, run
-`python3 -m analytics.market_report YYYY-MM-DD` in the deployment checkout; the next publish run
-commits it. The Compose service only collects: publishing needs git and push access on the host.
+`scripts/publish_reports.sh` commits the reports of finished UTC days, rebases on `origin/main` (so
+the deployment picks up merged code and a commit left by a failed push is retried) and pushes. It
+refuses to push anything outside `reports/market/`. To regenerate a past report, run
+`flock data/collector.lock python3 -m analytics.market_report YYYY-MM-DD` in the deployment checkout;
+the next publish run commits it. The Compose service only collects: publishing needs git and push
+access on the host.
 
 ## Repository layout
 

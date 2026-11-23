@@ -37,4 +37,6 @@ Read README.md first: its ground rules and metric definitions bind every change.
 
 - Follow the sprint order in README; do not build ahead of the current sprint.
 - Python 3.12+, type hints, standard library first, JSON-lines logging (`collectors.setup_logging`).
-- `python -m pytest` must pass. Every change is a commit and lands through a pull request.
+- `python -m pytest` must pass. Every change is a commit and lands through a pull request. One
+  exception, decided by the operator on 2026-11-23: `scripts/publish_reports.sh` commits finished
+  daily reports (`reports/market/` only) straight to `main` from the deployment checkout.
