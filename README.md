@@ -76,8 +76,8 @@ Collection runs from a deployment checkout that stays on `main` and is the only 
 checkout is a separate clone, run from its owner's crontab:
 
 ```cron
-11 * * * *  cd <checkout> && mkdir -p data && flock -n data/collector.lock sh -c 'python3 -m collectors.vast.collector; python3 -m analytics.market_report'
-41 2 * * *  cd <checkout> && mkdir -p data && flock -w 300 data/collector.lock scripts/publish_reports.sh   # once a day, any hour
+11 * * * *  cd <checkout> && mkdir -p data && flock -n -o data/collector.lock sh -c 'python3 -m collectors.vast.collector; python3 -m analytics.market_report'
+41 2 * * *  cd <checkout> && mkdir -p data && flock -w 300 -o data/collector.lock scripts/publish_reports.sh   # once a day, any hour
 ```
 
 `scripts/publish_reports.sh` fast-forwards to `origin/main` (so the deployment picks up merged
@@ -85,8 +85,13 @@ code), commits the reports of finished UTC days and pushes them. Local `main` ne
 its own: a failed push is undone and retried on the next run, and the script refuses to run while
 local `main` holds commits that are not on `origin/main`; its git network calls stop after 5 minutes,
 so a stalled remote cannot hold the lock for long. Run either these cron jobs or the Compose service
-in a checkout, not both: only the cron jobs share the lock. Cron does not read `.env`; to use an API
-key, set `VAST_API_KEY` in the collector's cron command. To regenerate a past report, run
+in a checkout, not both: only the cron jobs share the lock. Cron does not read `.env`: to use an API
+key, read it from a file in the cron command, as in `VAST_API_KEY="$(cat <key file>)" python3 -m
+collectors.vast.collector`. Never write the key itself into the crontab: cron logs every command
+line. The deployment checkout needs a commit identity (`git config user.name`, `user.email`) and
+push access for its owner. If a publish run is killed between its commit and its push, later runs
+stop with "local main has commits of its own"; `git reset --soft origin/main` in the deployment
+checkout recovers, and the next run publishes those reports. To regenerate a past report, run
 `flock data/collector.lock python3 -m analytics.market_report YYYY-MM-DD` in the deployment checkout;
 the next publish run commits it. The Compose service only collects: publishing needs git and push
 access on the host.

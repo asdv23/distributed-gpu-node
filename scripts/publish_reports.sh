@@ -7,7 +7,7 @@
 set -u
 cd "$(dirname "$0")/.." || exit 1
 [ "$(git branch --show-current)" = main ] || { echo "not on main: nothing published"; exit 1; }
-timeout 300 git fetch -q origin main || { echo "cannot fetch origin/main: nothing published"; exit 1; }
+timeout 300 git fetch -q origin refs/heads/main || { echo "cannot fetch origin/main: nothing published"; exit 1; }
 tip=$(git rev-parse --verify -q FETCH_HEAD) || { echo "fetch returned no commit: nothing published"; exit 1; }
 if ! git merge-base --is-ancestor HEAD "$tip" || ! git merge -q --ff-only "$tip"; then
     echo "local main has commits of its own or cannot fast-forward to origin/main: nothing published"
