@@ -1,0 +1,4 @@
+# Run from a checkout (README); the project is not packaged.
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
