@@ -32,6 +32,14 @@ def subjects(remote: Path) -> list[str]:
     return git(remote, "log", "--format=%s", "main").splitlines()
 
 
+def merge_pr_elsewhere(remote: Path, tmp_path: Path) -> None:
+    other = tmp_path / "other"
+    git(tmp_path, "clone", "-q", str(remote), str(other))
+    (other / "README.md").write_text("merged elsewhere\n")
+    git(other, "-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-qam", "merged PR")
+    git(other, "push", "-q", "origin", "main")
+
+
 @pytest.fixture
 def repos(tmp_path):
     remote, work = tmp_path / "remote.git", tmp_path / "work"
@@ -77,11 +85,7 @@ def test_failed_push_is_undone_and_retried_on_top_of_merged_work(repos, tmp_path
     assert publish(work).returncode == 1  # push rejected
     assert git(work, "rev-parse", "HEAD") == git(remote, "rev-parse", "main")  # no local commit left
     hook.unlink()
-    other = tmp_path / "other"  # meanwhile a pull request lands on main
-    git(tmp_path, "clone", "-q", str(remote), str(other))
-    (other / "README.md").write_text("merged elsewhere\n")
-    git(other, "-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-qam", "merged PR")
-    git(other, "push", "-q", "origin", "main")
+    merge_pr_elsewhere(remote, tmp_path)
     result = publish(work)
     assert result.returncode == 0, result.stdout + result.stderr
     assert subjects(remote)[1:] == ["merged PR", "init"]
@@ -110,3 +114,16 @@ def test_refuses_when_local_main_has_its_own_commits(repos, local_commit):
     local_commit(work)
     assert publish(work).returncode == 1
     assert subjects(remote) == ["init"]
+
+
+def test_documented_recovery_after_an_interrupted_publish(repos, tmp_path):
+    remote, work = repos
+    git(work, "add", report(work, FINISHED))
+    git(work, "commit", "-qm", "publish killed before its push")
+    merge_pr_elsewhere(remote, tmp_path)
+    assert publish(work).returncode == 1  # local main has a commit of its own
+    git(work, "reset", "--soft", "HEAD~1")  # the README's recovery
+    result = publish(work)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (work / "README.md").read_text() == "merged elsewhere\n"  # the checkout runs the merged code
+    assert subjects(remote)[1:] == ["merged PR", "init"]

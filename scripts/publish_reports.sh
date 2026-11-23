@@ -26,10 +26,15 @@ if git diff --cached --quiet -- "$@"; then
 fi
 # only these files go into the commit, whatever else the checkout holds
 git commit -q -m "Market reports through $(date -u -d yesterday +%F)" -- "$@" || exit 1
-# compare-and-swap on the fetched tip: nothing else is published, and nothing removed meanwhile comes back
-if ! timeout 300 git push -q --no-follow-tags --force-with-lease="refs/heads/main:$tip" origin HEAD:refs/heads/main; then
-    git reset -q --soft "$tip"
-    echo "push failed: the reports stay uncommitted for the next run"
-    exit 1
+# push exactly one commit on top of the fetched tip, and only while main still is that tip
+if [ "$(git rev-parse HEAD~1)" = "$tip" ] &&
+    timeout 300 git push -q --no-follow-tags --force-with-lease="refs/heads/main:$tip" origin HEAD:refs/heads/main; then
+    git log -1 --format='published %h %s'
+    exit 0
 fi
-git log -1 --format='published %h %s'
+if git reset -q --soft HEAD~1; then
+    echo "not published: the reports stay uncommitted for the next run"
+else
+    echo "not published, and undoing the local commit failed: run git reset --soft HEAD~1 here"
+fi
+exit 1

@@ -90,8 +90,9 @@ key, read it from a file in the cron command, as in `VAST_API_KEY="$(cat <key fi
 collectors.vast.collector`. Never write the key itself into the crontab: cron logs every command
 line. The deployment checkout needs a commit identity (`git config user.name`, `user.email`) and
 push access for its owner. If a publish run is killed between its commit and its push, later runs
-stop with "local main has commits of its own"; `git reset --soft origin/main` in the deployment
-checkout recovers, and the next run publishes those reports. To regenerate a past report, run
+stop with "local main has commits of its own"; run `git reset --soft HEAD~1` in the deployment
+checkout under the lock, and the next run fast-forwards and publishes those reports. `python3` on
+cron's PATH must be Python 3.12+; otherwise give the interpreter's absolute path. To regenerate a past report, run
 `flock data/collector.lock python3 -m analytics.market_report YYYY-MM-DD` in the deployment checkout;
 the next publish run commits it. The Compose service only collects: publishing needs git and push
 access on the host.
