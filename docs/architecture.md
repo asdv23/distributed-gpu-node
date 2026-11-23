@@ -34,22 +34,25 @@ to the VPS over the private overlay network. Nothing on either machine exposes S
 
 ## Market data flow (Sprint 2)
 
-1. `collectors/vast/collector.py` runs once an hour and sends 16 searches: 4 GPU names × the slices
-   Global rentable, CN rentable, CN not rentable, Nearby rentable.
+1. `collectors/vast/collector.py` runs once an hour. It first records the run and its planned
+   searches in `market_runs`, so a run that stores nothing still shows up as missing coverage. It then
+   sends 16 searches: 4 GPU names × the slices Global rentable, CN rentable, CN not rentable,
+   Nearby rentable.
 2. Each response becomes one `market_snapshots` row. The row holds the exact request and the gzip of
    the raw response, with IP addresses, hostnames, web pages and geocodes removed. Each offer also
    becomes one normalised `market_offers` row.
-3. `analytics/pricing.py` reduces a UTC day of snapshots to one row per machine and slice.
-   `analytics/market_report.py` renders `reports/market/YYYY-MM-DD.md` from those rows.
+3. `analytics/pricing.py` reduces the snapshots of the runs that started on one UTC day to one row
+   per machine and slice. `analytics/market_report.py` renders `reports/market/YYYY-MM-DD.md` from
+   those rows.
 
-Two platform properties shape this design. Both were measured on 2026-11-23; see
-[platform-research.md](platform-research.md).
+Two platform properties shape this design (details in [platform-research.md](platform-research.md)):
 
-- **Searches are sampled.** Identical searches return different subsets of the matching offers.
-  One snapshot is a lower bound of supply, and the union of a day's hourly snapshots comes
-  closer. The collector does not repeat searches to rebuild the full list (compliance).
-- **Searches use a daily quota** of unknown size. 16 searches per hour is 384 a day. On a quota
-  error the run stops at once.
+- **Searches are sampled** (measured 2026-11-23). Identical searches return different subsets of the
+  matching offers. One snapshot is a lower bound of supply, and the union of a day's hourly
+  snapshots comes closer. The collector does not repeat searches to rebuild the full list
+  (compliance).
+- **Searches count against a daily quota** of unknown size (read in the official client's code, not
+  yet hit). 16 searches per hour is 384 a day. On a quota error the run stops at once.
 
 A "model" is GPU name plus memory class (rounded to 4 GB). A 48 GB RTX 4090 is a different product
 from a 24 GB one.
@@ -67,7 +70,7 @@ with `CHECK` constraints. A report built from any `simulated` row is titled SIMU
 | Online Rate | online hours ÷ calendar hours | `node_intervals` state `online` |
 | GPU Utilization | NVML utilisation over time | node-agent telemetry (Sprint 5) |
 | Rental Occupancy | paid rental GPU-hours ÷ listed GPU-hours | `rentals` ÷ `node_intervals` state `listed` |
-| Productive Utilization | (paid rental + internal job) GPU-hours ÷ online GPU-hours | `rentals`, `node_intervals` |
+| Productive Utilization | all actual compute GPU-hours ÷ online GPU-hours | `rentals` and `node_intervals` state `internal_job`, until Sprint 4 decides whether a rental with no measured GPU load counts as compute |
 | Net Operating Cashflow | actual hosting revenue − all operating expenses | `ledger` |
 | Break-even Occupancy | fixed operating cost per hour ÷ (listed GPUs × (net revenue − extra running cost) per rented GPU-hour) | cost model (Sprint 4) |
 
@@ -79,8 +82,10 @@ Rules:
   its source). A `payout` moves money and is neither revenue nor expense.
 - Hardware purchase (`kind = 'hardware'`) is depreciated separately. Phase 1 does not require it to
   be paid back.
-- Amounts keep their original currency. USD→CNY uses `fx_rates`: the default is 6.60, a
-  user-specified value with its source, and any newer row with its own source and time wins.
+- Amounts keep their original currency. USD→CNY uses `fx_rates`: the rate with the latest
+  `effective_at` not after the transaction applies, and on a tie the higher id. The default 6.60
+  is user-specified (`data_class` `assumption`) and applies from the start; a newer row with its
+  own source, time and class replaces it.
 
 ## Storage
 

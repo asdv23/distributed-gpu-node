@@ -35,13 +35,14 @@ def _table(header: list[str], rows: list[list[object]]) -> list[str]:
 
 
 def build(con: Connection, day: str) -> str:
+    runs = con.execute("SELECT run_id, planned FROM market_runs WHERE platform = 'vast' AND substr(run_id, 1, 10) = ?"
+                       " ORDER BY run_id", (day,)).fetchall()
+    if not runs:
+        raise SystemExit(f"no Vast collection runs on {day}")
     snaps = con.execute(
         "SELECT run_id, gpu_name, scope, rentable, offer_count, auth, data_class FROM market_snapshots"
         " WHERE platform = 'vast' AND substr(run_id, 1, 10) = ? ORDER BY id", (day,)).fetchall()
-    if not snaps:
-        raise SystemExit(f"no Vast snapshots for {day}")
-    runs = sorted({s["run_id"] for s in snaps})
-    planned = len(runs) * len(GPUS) * len(SLICES)
+    planned = sum(r["planned"] for r in runs)
     earlier_days = con.execute(
         "SELECT COUNT(DISTINCT substr(run_id, 1, 10)) FROM market_snapshots"
         " WHERE platform = 'vast' AND substr(run_id, 1, 10) < ?", (day,)).fetchone()[0]
@@ -62,14 +63,16 @@ def build(con: Connection, day: str) -> str:
         out[0] = f"# SIMULATED — Vast.ai GPU market — {day} (UTC)"
         out += ["> **SIMULATED DATA. Not market data; do not cite.**", ""]
     out += [
-        "Every number below is **collected** data: listings and listed prices seen in the Vast.ai public",
-        "search API. The searches are sampled (§1), so counts are lower bounds. Nothing here is a rental",
+        "Listings and listed prices seen in the Vast.ai public search API; the data classes are in the",
+        "table below. The searches are sampled (§1), so counts are lower bounds. Nothing here is a rental",
         "rate, an occupancy rate or host revenue.",
         "",
         *_table(["Item", "Value"], [
-            ["Collection runs", f"{len(runs)} ({runs[0]} … {runs[-1]})"],
+            ["Collection runs", f"{len(runs)} ({runs[0]['run_id']} … {runs[-1]['run_id']}); a run belongs to "
+                                "the UTC day it started"],
             ["Searches stored", f"{len(snaps)} of {planned} planned"],
-            ["Auth", ", ".join(sorted({s['auth'] for s in snaps}))],
+            ["Data classes", ", ".join(sorted({s["data_class"] for s in snaps})) or "—"],
+            ["Auth", ", ".join(sorted({s['auth'] for s in snaps})) or "—"],
             ["Endpoint", f"`POST {URL}` (request shape of the official vastai CLI)"],
             ["Price", "on-demand listed GPU price (`dph_base` ÷ GPUs in the offer), USD per GPU-hour"],
         ]),
@@ -142,9 +145,13 @@ def build(con: Connection, day: str) -> str:
 
     out += ["## 6. Listing status in China mainland (observable flag, not occupancy)", "",
             "Machines with at least one rentable offer vs machines seen only in the not-rentable search.",
-            "Sampled searches and an undocumented flag: this is neither occupancy nor demand.", ""]
+            "Sampled searches and an undocumented flag: this is neither occupancy nor demand. Unavailable",
+            "unless both CN searches for the model succeeded at least once that day.", ""]
     rows = []
     for g in models:
+        if not (sizes[(g[0], "CN", True)] and sizes[(g[0], "CN", False)]):
+            rows.append([names[g], "—", "—", "unavailable"])
+            continue
         yes = {m["machine_id"] for m in seen[(*g, "CN", True)]}
         only_no = {m["machine_id"] for m in seen[(*g, "CN", False)]} - yes
         total = len(yes) + len(only_no)
@@ -179,8 +186,9 @@ def build(con: Connection, day: str) -> str:
             "  measured on the operator's machine.",
             "- **[assumption]** Older cards lose price as newer ones (RTX 5090) arrive; 30/90-day trends will",
             "  show whether this holds.",
-            "- **[third_party]** Platform behaviour changes without notice: the search sampling above grew",
-            "  from about half of the matches to 10-30% between September and November 2026 (vast-cli#536).",
+            "- **[third_party]** Platform behaviour changes without notice: the share of matching offers one",
+            "  search returns fell from about half to 10-30% between September and November 2026",
+            "  (vast-cli#536).",
             "- **[assumption]** Round-the-clock load wears consumer cards (fans, thermal pads, memory",
             "  temperature on the RTX 3090). Depreciation is tracked apart from operating cash flow.",
             ""]
@@ -190,9 +198,9 @@ def build(con: Connection, day: str) -> str:
 def main() -> int:
     con = connect()
     day = sys.argv[1] if len(sys.argv) > 1 else con.execute(
-        "SELECT substr(MAX(run_id), 1, 10) FROM market_snapshots WHERE platform = 'vast'").fetchone()[0]
+        "SELECT substr(MAX(run_id), 1, 10) FROM market_runs WHERE platform = 'vast'").fetchone()[0]
     if day is None:
-        raise SystemExit("no Vast snapshots in the database")
+        raise SystemExit("no Vast collection runs in the database")
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     path = OUT_DIR / f"{day}.md"
     path.write_text(build(con, day))

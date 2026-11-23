@@ -5,6 +5,7 @@ import urllib.request
 
 import pytest
 
+from analytics.market_report import build
 from collectors.vast import collector
 from database import connect
 
@@ -52,6 +53,18 @@ def test_run_survives_a_failed_slice_and_stops_on_quota(monkeypatch, offer):
     assert len(calls) == 4  # nothing sent after the quota error
     assert failed == 1 + (planned - 3)
     assert con.execute("SELECT COUNT(*) FROM market_snapshots").fetchone()[0] == 2
+    assert con.execute("SELECT planned FROM market_runs").fetchone()[0] == planned
+
+
+def test_run_that_stored_nothing_still_counts_as_missing(monkeypatch):
+    def quota(url, body, headers, sleep):
+        raise collector.QuotaExceeded
+
+    monkeypatch.setattr(collector, "post_json", quota)
+    con = connect(":memory:")
+    collector.run(con, sleep=lambda s: None)
+    day = con.execute("SELECT substr(run_id, 1, 10) FROM market_runs").fetchone()[0]
+    assert "| Searches missing on this day | 16 of 16 |" in build(con, day)
 
 
 def test_post_json_retries_transient_errors_not_quota(monkeypatch):

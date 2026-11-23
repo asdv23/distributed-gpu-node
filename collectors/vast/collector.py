@@ -156,6 +156,8 @@ def run(con: Connection, api_key: str | None = None, sleep: Callable[[float], No
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
     plan = [(gpu, scope, rentable) for gpu in GPUS for scope, rentable in SLICES]
+    with con:
+        con.execute("INSERT INTO market_runs (platform, run_id, planned) VALUES ('vast', ?, ?)", (run_id, len(plan)))
     failed = 0
     for i, (gpu, scope, rentable) in enumerate(plan):
         if i:
@@ -168,7 +170,8 @@ def run(con: Connection, api_key: str | None = None, sleep: Callable[[float], No
                                body=body, response=response)
         except QuotaExceeded:
             log.error("daily search quota exceeded, stopping run", extra={"data": ctx})
-            return failed + len(plan) - i
+            failed += len(plan) - i
+            break
         except Exception:  # one bad slice must not lose the rest of the run
             log.exception("slice failed", extra={"data": ctx})
             failed += 1
@@ -181,7 +184,8 @@ def run(con: Connection, api_key: str | None = None, sleep: Callable[[float], No
 
 def main() -> int:
     setup_logging()
-    return 1 if run(connect(), os.environ.get("VAST_API_KEY") or None) else 0
+    # strip: a CR or newline from an edited .env makes an invalid header whose error text holds the key
+    return 1 if run(connect(), os.environ.get("VAST_API_KEY", "").strip() or None) else 0
 
 
 if __name__ == "__main__":

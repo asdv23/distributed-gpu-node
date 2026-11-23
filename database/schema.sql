@@ -12,7 +12,16 @@
 
 -- ------------------------------------------------------------------ market data (Sprint 2)
 
--- One row per API request. A run (run_id) is all requests made by one collector invocation.
+-- One row per collector run, written before its first request, so a run that stored nothing still
+-- counts in coverage. A run belongs to the UTC day it started.
+CREATE TABLE IF NOT EXISTS market_runs (
+    platform TEXT    NOT NULL,                  -- 'vast'
+    run_id   TEXT    NOT NULL,                  -- UTC start of the run, 'YYYY-MM-DDTHH:MM:SSZ'
+    planned  INTEGER NOT NULL,                  -- searches the run set out to send
+    PRIMARY KEY (platform, run_id)
+);
+
+-- One row per API request, in the run run_id.
 CREATE TABLE IF NOT EXISTS market_snapshots (
     id           INTEGER PRIMARY KEY,
     platform     TEXT    NOT NULL,              -- 'vast'
@@ -65,7 +74,8 @@ CREATE TABLE IF NOT EXISTS market_offers (
 -- Metric definitions these tables serve (docs/architecture.md#metrics):
 --   Online Rate            = online hours / calendar hours
 --   Rental Occupancy       = paid rental GPU-hours / listed GPU-hours
---   Productive Utilization = (paid rental + internal job) GPU-hours / online GPU-hours
+--   Productive Utilization = all actual compute GPU-hours / online GPU-hours (which intervals count
+--                            as compute is settled in Sprint 4, see the architecture doc)
 -- GPU Utilization comes from node-agent telemetry (Sprint 5) and never stands in for occupancy.
 
 CREATE TABLE IF NOT EXISTS nodes (
@@ -117,12 +127,17 @@ CREATE TABLE IF NOT EXISTS ledger (
     note        TEXT
 );
 
--- USD->CNY. A conversion uses the latest rate whose effective_at is not after the transaction.
+-- USD->CNY. A conversion uses the rate with the latest effective_at not after the transaction (on a
+-- tie, the higher id). The default applies from the start, so purchases made before the project
+-- still convert.
 CREATE TABLE IF NOT EXISTS fx_rates (
     id           INTEGER PRIMARY KEY,
     usd_cny      REAL NOT NULL,
     effective_at TEXT NOT NULL,
-    source       TEXT NOT NULL
+    source       TEXT NOT NULL,
+    data_class   TEXT NOT NULL CHECK (data_class IN
+                 ('verified', 'official_doc', 'collected', 'third_party', 'estimate', 'assumption', 'simulated'))
 );
-INSERT OR IGNORE INTO fx_rates (id, usd_cny, effective_at, source)
-VALUES (1, 6.60, '2026-11-23T00:00:00Z', 'project default set by the operator; not a market quote');
+INSERT OR IGNORE INTO fx_rates (id, usd_cny, effective_at, source, data_class)
+VALUES (1, 6.60, '1970-01-01T00:00:00Z', 'project default set by the operator on 2026-11-23; not a market quote',
+        'assumption');

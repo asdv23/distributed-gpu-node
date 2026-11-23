@@ -1,14 +1,4 @@
-[project]
-name = "distributed-gpu-node"
-version = "0.1.0"
-description = "Research and operations toolkit for a personal GPU hosting node"
-requires-python = ">=3.12"
-license = "MIT"
-dependencies = []  # standard library only so far
-
-[project.optional-dependencies]
-dev = ["pytest>=8"]
-
+# Run from a checkout (README); the project is not packaged.
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
