@@ -2,6 +2,7 @@
 import os
 import shutil
 import subprocess
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -9,7 +10,7 @@ import pytest
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "publish_reports.sh"
 # never reach the caller's repository or read the caller's git configuration
 ENV = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")} | {
-    "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1"}
+    "GIT_CONFIG_GLOBAL": os.devnull, "GIT_CONFIG_NOSYSTEM": "1", "TZ": "Etc/GMT-14"}  # local date often != UTC date
 FINISHED, UNFINISHED = "2000-01-01", "2999-01-01"  # before and after any real "today"
 
 
@@ -52,13 +53,15 @@ def repos(tmp_path):
 
 def test_publishes_finished_reports_only(repos):
     remote, work = repos
-    finished = report(work, FINISHED)
+    today = datetime.now(UTC).date()
+    finished = sorted([report(work, FINISHED), report(work, str(today - timedelta(days=1)))])
+    report(work, str(today))  # the UTC day still being collected
     report(work, UNFINISHED)
     (work / "notes.txt").write_text("staged in the checkout, not a report\n")
     git(work, "add", "notes.txt")
     result = publish(work)
     assert result.returncode == 0, result.stdout + result.stderr
-    assert git(remote, "show", "--name-only", "--format=", "main").split() == [finished]
+    assert sorted(git(remote, "show", "--name-only", "--format=", "main").split()) == finished
     assert git(work, "diff", "--cached", "--name-only").split() == ["notes.txt"]  # still staged, never committed
     again = publish(work)
     assert (again.returncode, again.stdout.strip()) == (0, "no finished report to publish")

@@ -7,8 +7,9 @@
 set -u
 cd "$(dirname "$0")/.." || exit 1
 [ "$(git branch --show-current)" = main ] || { echo "not on main: nothing published"; exit 1; }
-git fetch -q origin main || { echo "cannot fetch origin/main: nothing published"; exit 1; }
-if ! git merge-base --is-ancestor HEAD origin/main || ! git merge -q --ff-only origin/main; then
+timeout 300 git fetch -q origin main || { echo "cannot fetch origin/main: nothing published"; exit 1; }
+tip=$(git rev-parse --verify -q FETCH_HEAD) || { echo "fetch returned no commit: nothing published"; exit 1; }
+if ! git merge-base --is-ancestor HEAD "$tip" || ! git merge -q --ff-only "$tip"; then
     echo "local main has commits of its own or cannot fast-forward to origin/main: nothing published"
     exit 1
 fi
@@ -25,8 +26,9 @@ if git diff --cached --quiet -- "$@"; then
 fi
 # only these files go into the commit, whatever else the checkout holds
 git commit -q -m "Market reports through $(date -u -d yesterday +%F)" -- "$@" || exit 1
-if ! git push -q origin main; then
-    git reset -q --soft origin/main
+# compare-and-swap on the fetched tip: nothing else is published, and nothing removed meanwhile comes back
+if ! timeout 300 git push -q --no-follow-tags --force-with-lease="refs/heads/main:$tip" origin HEAD:refs/heads/main; then
+    git reset -q --soft "$tip"
     echo "push failed: the reports stay uncommitted for the next run"
     exit 1
 fi
