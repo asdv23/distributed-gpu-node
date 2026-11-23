@@ -184,8 +184,10 @@ def run(con: Connection, api_key: str | None = None, sleep: Callable[[float], No
 
 def main() -> int:
     setup_logging()
-    # strip: a CR or newline from an edited .env makes an invalid header whose error text holds the key
-    return 1 if run(connect(), os.environ.get("VAST_API_KEY", "").strip() or None) else 0
+    api_key = os.environ.get("VAST_API_KEY", "").strip() or None
+    if api_key and not api_key.isprintable():  # an invalid header's error text would carry the key into logs
+        raise SystemExit("VAST_API_KEY contains control characters (a line break?); fix it in .env")
+    return 1 if run(connect(), api_key) else 0
 
 
 if __name__ == "__main__":

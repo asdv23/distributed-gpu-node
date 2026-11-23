@@ -64,7 +64,15 @@ def test_run_that_stored_nothing_still_counts_as_missing(monkeypatch):
     con = connect(":memory:")
     collector.run(con, sleep=lambda s: None)
     day = con.execute("SELECT substr(run_id, 1, 10) FROM market_runs").fetchone()[0]
-    assert "| Searches missing on this day | 16 of 16 |" in build(con, day)
+    report = build(con, day)
+    assert "| Searches missing on this day | 16 of 16 |" in report
+    assert "| RTX 3060 | Global · rentable | 0 | 0 | 0 | missing |" in report  # GPUs without data stay listed
+
+
+def test_main_rejects_key_with_line_break(monkeypatch):
+    monkeypatch.setenv("VAST_API_KEY", "abc\ndef")
+    with pytest.raises(SystemExit, match="control characters"):
+        collector.main()
 
 
 def test_post_json_retries_transient_errors_not_quota(monkeypatch):

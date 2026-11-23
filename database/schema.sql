@@ -96,6 +96,8 @@ CREATE TABLE IF NOT EXISTS node_intervals (
                ('verified', 'official_doc', 'collected', 'third_party', 'estimate', 'assumption', 'simulated'))
 );
 
+-- One row per paid interval of a customer rental. When a platform stops billing GPU time inside one
+-- contract (e.g. a stopped instance), each billed stretch is its own row with the same platform_ref.
 CREATE TABLE IF NOT EXISTS rentals (
     id           INTEGER PRIMARY KEY,
     node_id      TEXT    NOT NULL REFERENCES nodes (id),

@@ -13,7 +13,7 @@ Each fact is tagged with its data class. Dates are when it was checked.
 | Search answers without a key; the official CLI sends a key only when one is configured | collected, verified | live requests; vastai 1.11.2 source (`api/client.py`) |
 | A response without a key holds at most 64 offers; a higher `limit` is ignored and `truncated` stays `false` | collected | `limit` 100…10000 all returned 64 |
 | **Responses are samples.** Six identical searches (KR, RTX 3060) returned 37 offers each but 96 distinct offers on 58 machines between them, still growing. CN RTX 4090 rentable: 27 offers each, 48 distinct offers, while machines levelled off at 18 | collected | probe log, 2026-11-23 |
-| The same sampling happens with an API key and in the web console; a single response held about 50% of the matches in September 2026 and 10–30% in November | third_party | [vast-cli#536](https://github.com/vast-ai/vast-cli/issues/536), open, no reply from Vast |
+| The same sampling happens with an API key and in the web console. One response held about 50% of the offers seen across the reporter's repeated searches in September 2026, and 10–30% in November | third_party | [vast-cli#536](https://github.com/vast-ai/vast-cli/issues/536), open, no reply from Vast |
 | Rate-limit headers: `x-ratelimit-limit: 30`, reset 1–2 s ahead | collected | response headers |
 | A daily search quota exists: HTTP 429 with `error: search_quota_exceeded`, reset at 00:00 UTC; the official client does not retry it. Its size is unknown | verified | vastai 1.11.2 `api/client.py` |
 | The client retries 429/502/503/504 and connection errors with backoff | verified | same file |

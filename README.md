@@ -65,6 +65,10 @@ cp .env.example .env     # optional: VAST_API_KEY
 docker compose up -d     # one run per hour, then today's report is rewritten
 ```
 
+The service writes `data/` and `reports/` in the checkout. With rootful Docker it writes them as
+root, so either run it from a root-owned checkout or add `user: "<uid>:<gid>"` of the checkout owner
+to the service.
+
 ## Repository layout
 
 | Path | Contents | Sprint |

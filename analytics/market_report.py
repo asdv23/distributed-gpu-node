@@ -50,13 +50,15 @@ def build(con: Connection, day: str) -> str:
     for s in snaps:
         sizes[(s["gpu_name"], s["scope"], bool(s["rentable"]))].append(s["offer_count"])
     machines = machines_seen(con, day)
-    # a model is GPU name + memory class: memory-modified boards are a different product
-    models = sorted({(m["gpu_name"], m["vram_gb"]) for m in machines},
+    # a model is GPU name + memory class: memory-modified boards are a different product. A GPU with
+    # no machine seen keeps its rows, so missing or empty searches stay visible.
+    seen_names = {m["gpu_name"] for m in machines}
+    models = sorted({(m["gpu_name"], m["vram_gb"]) for m in machines} | {(g, None) for g in GPUS if g not in seen_names},
                     key=lambda g: (GPUS.index(g[0]) if g[0] in GPUS else len(GPUS), g[1]))
     seen: dict[tuple, list[Row]] = defaultdict(list)
     for m in machines:
         seen[(m["gpu_name"], m["vram_gb"], m["scope"], bool(m["rentable"]))].append(m)
-    names = {g: f"{g[0]} {g[1]}GB" for g in models}
+    names = {g: f"{g[0]} {g[1]}GB" if g[1] else g[0] for g in models}
 
     out = [f"# Vast.ai GPU market — {day} (UTC)", ""]
     if any(s["data_class"] == "simulated" for s in snaps):
@@ -186,9 +188,9 @@ def build(con: Connection, day: str) -> str:
             "  measured on the operator's machine.",
             "- **[assumption]** Older cards lose price as newer ones (RTX 5090) arrive; 30/90-day trends will",
             "  show whether this holds.",
-            "- **[third_party]** Platform behaviour changes without notice: the share of matching offers one",
-            "  search returns fell from about half to 10-30% between September and November 2026",
-            "  (vast-cli#536).",
+            "- **[third_party]** Platform behaviour changes without notice: one search returned about half",
+            "  of the offers seen across a reporter's repeated searches in September 2026, and 10-30% by",
+            "  November (vast-cli#536).",
             "- **[assumption]** Round-the-clock load wears consumer cards (fans, thermal pads, memory",
             "  temperature on the RTX 3090). Depreciation is tracked apart from operating cash flow.",
             ""]
@@ -203,7 +205,7 @@ def main() -> int:
         raise SystemExit("no Vast collection runs in the database")
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     path = OUT_DIR / f"{day}.md"
-    path.write_text(build(con, day))
+    path.write_text(build(con, day), encoding="utf-8")
     print(path)
     return 0
 
