@@ -69,6 +69,22 @@ The service writes `data/` and `reports/` in the checkout. With rootful Docker i
 root, so either run it from a root-owned checkout or add `user: "<uid>:<gid>"` of the checkout owner
 to the service.
 
+### Deployment checkout and published reports
+
+Collection runs from a deployment checkout that stays on `main` and is the only writer of
+`reports/market/`. Development happens in another checkout. On the agent host the deployment
+checkout is a separate clone, run from its owner's crontab:
+
+```cron
+11 * * * *  cd <checkout> && flock -n data/collector.lock sh -c 'python3 -m collectors.vast.collector; python3 -m analytics.market_report'
+41 2 * * *  cd <checkout> && flock -w 300 data/collector.lock scripts/publish_reports.sh   # once a day, after 00:00 UTC
+```
+
+`scripts/publish_reports.sh` fast-forwards to `origin/main` (so the deployment picks up merged
+code), commits the reports of finished UTC days and pushes them. To regenerate a past report, run
+`python3 -m analytics.market_report YYYY-MM-DD` in the deployment checkout; the next publish run
+commits it. The Compose service only collects: publishing needs git and push access on the host.
+
 ## Repository layout
 
 | Path | Contents | Sprint |
