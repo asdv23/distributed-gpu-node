@@ -34,12 +34,44 @@ Each fact is tagged with its data class. Dates are when it was checked.
 - Host terms of service, verification criteria, payout and withdrawal methods.
 - Host-side API for own machines: listings, rentals, earnings (Sprint 4).
 
-## Clore.ai, Salad, Akash Network
+## Clore.ai (checked 2026-11-24)
 
-Not researched yet. Questions for each, to be answered from official sources:
+| Fact | Class | Evidence |
+|---|---|---|
+| The server list is public: `https://clore.ai/webapi/marketplace/servers`, no key | official_doc | [pricing guide](https://docs.clore.ai/guides/getting-started/pricing) ("The marketplace listing is public") |
+| Feed prices are USD per server per day; ÷ 24 ÷ GPUs gives USD per GPU-hour | official_doc | same page |
+| Each server has a `rented` flag, `gpu_array`, one memory size (`specs.gpuram`), country (`specs.net.cc`) and speed-test results; no IP addresses | collected | feed, 2851 servers, 0 IPv4-looking strings |
+| 101 of 2851 servers carry no USD on-demand price; 120 mix GPU models | collected | feed |
+| The feed answers Python's default user agent with 403 and a plain client name with 200 | collected | requests on 2026-11-24 |
+| `rented` is a per-server flag at download time; partial GPU rentals do not show. A share of servers flagged rented is a snapshot count, not occupancy | assumption | feed and [host API](https://docs.clore.ai/for-hosts/api) |
+| Host fee 5% on-demand, 1.25% spot, +15% when the renter pays in BTC/USDT/USDC | official_doc | [host fees](https://docs.clore.ai/for-hosts/host-fees) |
+| Hosts: Ubuntu 22.04+ or HiveOS, NVIDIA, ≥8 GB RAM; "minimum" 100/100 Mbps, but 60% of RTX 3060 listings show under 100 Mbps upload | official_doc, collected | [network requirements](https://docs.clore.ai/for-hosts/installing-clore-hosting/network-requirements) |
+| The installer warns that Docker Hub, GitHub and GitLab are often blocked or throttled in China | official_doc | [installer](https://gitlab.com/cloreai-public/hosting-agent-installer/-/raw/main/install.sh) |
+| Payouts in CLORE, BTC, USDT or USDC only; no fiat | official_doc | [deposit and withdrawal](https://docs.clore.ai/getting-started/deposit-withdrawal) |
 
-1. Is there an official API or CLI exposing marketplace offers or prices? Does it need
-   authentication, and what are its limits?
-2. Can a host read its own rentals and earnings through an API?
-3. Host requirements and terms: hardware, OS, network, verification, payouts, minimum commitments.
-4. Can a GPU switch between platforms without breaking the host terms?
+## Salad (checked 2026-11-24)
+
+| Fact | Class | Evidence |
+|---|---|---|
+| Host earnings per GPU class over the last 7 days (mean, p25, p75, p99, `work` = % of time with a job), idle time included: `https://cdn.salad.com/site-data/earning-rates.json`, public | collected | feed; [earning rates](https://community.salad.com/gpu-earning-rates-november-2026) |
+| Demand monitor per GPU: demand tier, earning-rate range, `utilizationPct` (undocumented, range 0-400): `https://app-api.salad.com/api/v2/demand-monitor/gpu`, public | collected | feed |
+| Salad's classes do not separate memory variants (an RTX 3060 8 GB and 12 GB are one class) | collected | feed |
+| Hosts: Windows 10/11 with WSL2 only; no public IP or port forwarding mentioned (customer traffic enters through Salad's gateway); 20 Mbps upload recommended | official_doc | [compatibility](https://support.salad.com/faq/compatibility/is-my-machine-compatible-with-salad), [overview](https://docs.salad.com/container-engine/explanation/core-concepts/overview) |
+| No jobs behind a VPN or proxy; whether salad.com is reachable from mainland China is not verified | official_doc, assumption | [unblocking Salad](https://support.salad.com/article/186-how-to-unblock-salad-with-your-isp) |
+| Balance is redeemed for PayPal (USD), prepaid or gift cards; no bank withdrawal | official_doc | [withdrawals](https://support.salad.com/faq/your-account/is-there-a-withdrawal-limit) |
+
+## Akash Network and others (checked 2026-11-24)
+
+- **Akash:** a provider needs Kubernetes, a static public IP or DDNS with its own domain, open
+  ports 80/443/8443/8444/30000-32767 and at least 100 Mbps symmetric (official_doc,
+  [hardware requirements](https://akash.network/docs/providers/getting-started/hardware-requirements/)). A home
+  line with 50 Mbps upload does not qualify. Payouts are in AKT. One provider rented out RTX 3060s on 2026-11-24
+  (collected, [console API](https://console-api.akash.network/v1/gpu)).
+- **Not open to a home RTX 3060:**
+  - RunPod: community hosting is closed to new hosts.
+  - TensorDock: datacenters only.
+  - io.net: needs at least 75 Mbps upload.
+
+  All official_doc, checked 2026-11-24.
+- **Open to it but without public occupancy data:** Nosana and Paralon. Both pay in tokens or
+  USDC on Solana.

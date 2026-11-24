@@ -54,6 +54,7 @@ Python 3.12+, standard library only (pytest for the tests).
 
 ```sh
 python -m collectors.vast.collector    # one collection run (16 searches) into data/gpu_node.db
+python -m collectors.clore.collector; python -m collectors.salad.collector   # public feeds
 python -m analytics.market_report      # writes reports/market/<UTC day>.md
 pip install pytest && python -m pytest
 ```
@@ -76,7 +77,7 @@ Collection runs from a deployment checkout that stays on `main` and is the only 
 checkout is a separate clone, run from its owner's crontab:
 
 ```cron
-11 * * * *  cd <checkout> && mkdir -p data && flock -n -o data/collector.lock sh -c 'python3 -m collectors.vast.collector; python3 -m analytics.market_report'
+11 * * * *  cd <checkout> && mkdir -p data && flock -n -o data/collector.lock sh -c 'python3 -m collectors.vast.collector; python3 -m collectors.clore.collector; python3 -m collectors.salad.collector; python3 -m analytics.market_report'
 41 2 * * *  cd <checkout> && mkdir -p data && flock -w 300 -o data/collector.lock scripts/publish_reports.sh   # once a day, any hour
 ```
 
@@ -111,7 +112,8 @@ access on the host.
 | `node-agent/` | read-only monitoring agent for the GPU host | 5 |
 | `scheduler/`, `scheduler/adapters/` | simulated multi-platform scheduler | 6 |
 | `dashboard/` | web dashboard | after 4 |
-| `collectors/clore/`, `salad/`, `akash/` | other markets | later |
+| `collectors/clore/`, `collectors/salad/` | Clore.ai and Salad public feeds | 2 |
+| `collectors/akash/` | Akash (not suited to a home GPU, see platform research) | later |
 | `research/` | dated research notes: platforms, GPU markets, energy | ongoing |
 
 Empty directories hold a `.gitkeep` until their sprint starts.
