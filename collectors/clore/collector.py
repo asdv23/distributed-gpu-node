@@ -11,7 +11,8 @@ import sys
 from collectors import collect_feeds, setup_logging
 from database import connect
 
-FEEDS = {"servers": "https://clore.ai/webapi/marketplace/servers"}
+FEEDS = {"servers": ("https://clore.ai/webapi/marketplace/servers",
+                     lambda d: isinstance(d, dict) and d.get("status") == "ok" and isinstance(d.get("all_servers"), list))}
 
 
 def main() -> int:

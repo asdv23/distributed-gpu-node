@@ -22,14 +22,26 @@ SALAD_RATES = {"updatedAt": "2026-11-23T08:00:00Z", "window": {"from": "2026-11-
 SALAD_DEMAND = [{"name": "NVIDIA GeForce RTX 3060", "demandTier": "high", "utilizationPct": 94}]
 
 
-def test_collect_feeds_stores_bodies_and_counts_failures(monkeypatch):
-    bodies = {"u1": json.dumps(CLORE).encode(), "u2": b"<html>not json</html>"}
+def test_collect_feeds_stores_valid_bodies_only(monkeypatch):
+    bodies = {"ok": json.dumps(CLORE).encode(), "html": b"<html>not json</html>",
+              "error": b'{"status": "error", "error": "busy"}', "ip": json.dumps({**CLORE, "host": "203.0.113.7"}).encode()}
     monkeypatch.setattr(collectors, "get_bytes", lambda url, sleep: bodies[url])
+    valid = lambda d: d.get("status") == "ok" and isinstance(d.get("all_servers"), list)
     con = connect(":memory:")
-    assert collectors.collect_feeds(con, "clore", {"servers": "u1", "broken": "u2"}, sleep=lambda s: None) == 1
-    (raw,) = con.execute("SELECT raw_gzip FROM market_feeds").fetchone()
-    assert gzip.decompress(raw) == bodies["u1"]  # stored as served
-    assert con.execute("SELECT planned FROM market_runs WHERE platform = 'clore'").fetchone()[0] == 2
+    feeds = {name: (name, valid) for name in bodies}
+    assert collectors.collect_feeds(con, "clore", feeds, sleep=lambda s: None) == 3  # html, error shape, IP address
+    assert [gzip.decompress(r) for (r,) in con.execute("SELECT raw_gzip FROM market_feeds")] == [bodies["ok"]]  # as served
+    assert con.execute("SELECT planned FROM market_runs WHERE platform = 'clore'").fetchone()[0] == 4
+
+
+def test_unreadable_feed_leaves_the_rest_of_the_report():
+    con = connect(":memory:")
+    con.execute("INSERT INTO market_runs (platform, run_id, planned) VALUES ('vast', ?, 16)", (RUN,))
+    con.execute("INSERT INTO market_feeds (platform, feed, run_id, collected_at, url, raw_gzip) VALUES"
+                " ('clore', 'servers', ?, ?, 'u', ?)", (RUN, RUN, gzip.compress(b'{"status": "ok", "all_servers": [{"id": 1}]}')))
+    report = build(con, "2026-11-23")
+    assert "## 9. Investment and operating risks" in report
+    assert "Unavailable: the stored feeds could not be read (KeyError" in report
 
 
 def test_report_section_from_feeds():
@@ -41,7 +53,7 @@ def test_report_section_from_feeds():
                     " VALUES (?, ?, ?, ?, 'u', ?, 'simulated')", (platform, feed, RUN, RUN, gzip.compress(json.dumps(body).encode())))
     report = build(con, "2026-11-23")
     assert report.startswith("# SIMULATED")  # simulated feeds mark the report too
-    assert "Servers that mix GPU models are left out (1 in the last download)" in report
+    assert "servers that mix GPU models are left out\n(1 in the last download)" in report
     # 3 GPUs of 12 GB, 1 on a rented server; the CN one is rented; prices 0.05 and 0.06 per GPU-hour
     assert "| RTX 3060 12GB | 3 | 33% | 1 | 100% | $0.055 | $0.050 |" in report
     assert "| RTX 3060 8GB | 1 | 0% | 0 | — | — | — |" in report

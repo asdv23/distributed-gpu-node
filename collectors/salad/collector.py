@@ -12,8 +12,9 @@ from collectors import collect_feeds, setup_logging
 from database import connect
 
 FEEDS = {
-    "earning-rates": "https://cdn.salad.com/site-data/earning-rates.json",
-    "demand-monitor": "https://app-api.salad.com/api/v2/demand-monitor/gpu",
+    "earning-rates": ("https://cdn.salad.com/site-data/earning-rates.json",
+                      lambda d: isinstance(d, dict) and isinstance(d.get("classes"), list)),
+    "demand-monitor": ("https://app-api.salad.com/api/v2/demand-monitor/gpu", lambda d: isinstance(d, list)),
 }
 
 

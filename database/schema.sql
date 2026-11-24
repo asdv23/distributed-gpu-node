@@ -1,5 +1,6 @@
 -- distributed-gpu-node schema (SQLite). database.connect() applies it idempotently on every open.
--- Once a deployed database holds data, schema changes ship as numbered scripts in database/migrations/.
+-- New tables and indexes are added here. Changes to existing tables, which this file cannot apply to a
+-- deployed database, ship as numbered scripts in database/migrations/.
 --
 -- data_class records where a fact comes from (docs/architecture.md#data-provenance):
 --   verified      checked against a primary source

@@ -4,6 +4,7 @@ from __future__ import annotations
 import gzip
 import json
 import logging
+import re
 import time
 import urllib.error
 import urllib.request
@@ -16,6 +17,7 @@ from sqlite3 import Connection
 USER_AGENT = "gpu-market-collector/0.1"
 RETRY_STATUS = {429, 502, 503, 504}
 FEED_INTERVAL_S = 2.0
+IPV4 = re.compile(rb"(?<![\d.])(?:\d{1,3}\.){3}\d{1,3}(?![\d.])")
 
 log = logging.getLogger("collectors")
 
@@ -65,20 +67,24 @@ def get_bytes(url: str, *, timeout: float = 60, attempts: int = 4, backoff_s: fl
     raise AssertionError("unreachable")
 
 
-def collect_feeds(con: Connection, platform: str, feeds: dict[str, str],
+def collect_feeds(con: Connection, platform: str, feeds: dict[str, tuple[str, Callable[[object], bool]]],
                   sleep: Callable[[float], None] = time.sleep) -> int:
-    """Download each public feed once and store the body as served. Returns the number of feeds that failed."""
+    """Download each public feed once and store the body as served, if it has the expected shape and
+    holds nothing that looks like an IP address. Returns the number of feeds that failed."""
     run_id = _now()
     with con:
         con.execute("INSERT INTO market_runs (platform, run_id, planned) VALUES (?, ?, ?)", (platform, run_id, len(feeds)))
     failed = 0
-    for i, (feed, url) in enumerate(feeds.items()):
+    for i, (feed, (url, valid)) in enumerate(feeds.items()):
         if i:
             sleep(FEED_INTERVAL_S)
         ctx = {"run_id": run_id, "platform": platform, "feed": feed}
         try:
             body = get_bytes(url, sleep=sleep)
-            json.loads(body)  # store only what parses
+            if not valid(json.loads(body)):
+                raise ValueError("unexpected feed shape")
+            if IPV4.search(body):  # the project never stores host IP addresses
+                raise ValueError("feed contains IP-address-like text")
             with con:
                 con.execute("INSERT INTO market_feeds (platform, feed, run_id, collected_at, url, raw_gzip)"
                             " VALUES (?, ?, ?, ?, ?, ?)", (platform, feed, run_id, _now(), url, gzip.compress(body)))

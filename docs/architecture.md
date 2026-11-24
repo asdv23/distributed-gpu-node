@@ -94,8 +94,9 @@ Rules:
 
 ## Storage
 
-SQLite (`database/schema.sql`) is applied idempotently on every connect. Once a deployed database
-holds data, changes ship as numbered scripts in `database/migrations/`. Measured volume: about
+SQLite (`database/schema.sql`) is applied idempotently on every connect. New tables and indexes
+are added there. Changes to existing tables of a deployed database ship as numbered scripts in
+`database/migrations/`. Measured volume: about
 0.4 MB per Vast run and 0.46 MB per Clore.ai download, so about 21 MB a day and under 8 GB a year
 at one run per hour.
 PostgreSQL becomes worthwhile when several writers or the dashboard need concurrent access.

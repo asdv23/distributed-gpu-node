@@ -43,7 +43,7 @@ Each fact is tagged with its data class. Dates are when it was checked.
 | Each server has a `rented` flag, `gpu_array`, one memory size (`specs.gpuram`), country (`specs.net.cc`) and speed-test results; no IP addresses | collected | feed, 2851 servers, 0 IPv4-looking strings |
 | 101 of 2851 servers carry no USD on-demand price; 120 mix GPU models | collected | feed |
 | The feed answers Python's default user agent with 403 and a plain client name with 200 | collected | requests on 2026-11-24 |
-| `rented` is per server; partial GPU rentals do not show, so it is a lower bound of occupancy | assumption | feed and [host API](https://docs.clore.ai/for-hosts/api) |
+| `rented` is a per-server flag at download time; partial GPU rentals do not show. A share of servers flagged rented is a snapshot count, not occupancy | assumption | feed and [host API](https://docs.clore.ai/for-hosts/api) |
 | Host fee 5% on-demand, 1.25% spot, +15% when the renter pays in BTC/USDT/USDC | official_doc | [host fees](https://docs.clore.ai/for-hosts/host-fees) |
 | Hosts: Ubuntu 22.04+ or HiveOS, NVIDIA, ≥8 GB RAM; "minimum" 100/100 Mbps, but 60% of RTX 3060 listings show under 100 Mbps upload | official_doc, collected | [network requirements](https://docs.clore.ai/for-hosts/installing-clore-hosting/network-requirements) |
 | The installer warns that Docker Hub, GitHub and GitLab are often blocked or throttled in China | official_doc | [installer](https://gitlab.com/cloreai-public/hosting-agent-installer/-/raw/main/install.sh) |

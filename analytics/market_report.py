@@ -199,14 +199,24 @@ def build(con: Connection, day: str) -> str:
             ""]
 
     out += ["## 10. Other marketplaces: Clore.ai and Salad (public feeds)", ""]
+    try:
+        out += _feeds_section(con, day)
+    except Exception as e:  # unexpected feed content must not stop the rest of the report
+        out += [f"Unavailable: the stored feeds could not be read ({type(e).__name__}: {e}).", ""]
+    return "\n".join(out)
+
+
+def _feeds_section(con: Connection, day: str) -> list[str]:
+    out: list[str] = []
     rows, clore_runs, mixed = clore_servers(con, day, GPUS)
     if not clore_runs:
         out += ["Clore.ai: no download on this day.", ""]
     else:
-        out += [f"**Clore.ai**, public server list, {clore_runs} download(s). A GPU counts as rented when the feed marks",
-                "its server rented. That is per whole server and partial rentals do not show, so read it as a lower",
-                f"bound. Servers that mix GPU models are left out ({mixed} in the last download). Price: on-demand USD",
-                "per server per day ÷ 24 ÷ GPUs (official doc).", ""]
+        out += [f"**Clore.ai**, public server list, {clore_runs} download(s). \"On rented servers\" is the share of GPU",
+                "observations, over the day's downloads, on servers the feed flagged as rented at download time. It is",
+                "a snapshot count, not occupancy: the flag covers the whole server and partial rentals do not show.",
+                "Each server's single memory size is applied to all its GPUs; servers that mix GPU models are left out",
+                f"({mixed} in the last download). Prices are listed on-demand prices: USD per server per day ÷ 24 ÷ GPUs.", ""]
         by_model: dict[str, list[tuple]] = defaultdict(list)
         for r in rows:
             by_model[r[0]].append(r)
@@ -220,8 +230,8 @@ def build(con: Connection, day: str) -> str:
             table.append([model, f"{gpus / clore_runs:.0f}", f"{sum(r[1] for r in ms if r[3]) / gpus:.0%}",
                           f"{cn_gpus / clore_runs:.0f}", f"{sum(r[1] for r in cn if r[3]) / cn_gpus:.0%}" if cn_gpus else "—",
                           _usd(p_all[1]) if p_all else "—", _usd(p_rented[1]) if p_rented else "—"])
-        out += _table(["Model", "GPUs listed (avg)", "Share rented", "CN GPUs (avg)", "CN share rented",
-                       "P50 $/GPU-h, all", "P50 $/GPU-h, rented"], table)
+        out += _table(["Model", "GPUs listed (avg)", "On rented servers", "CN GPUs (avg)", "CN on rented servers",
+                       "P50 listed $/GPU-h, all", "P50 listed $/GPU-h, rented"], table)
 
     rates, demand = latest(con, "salad", "earning-rates", day), latest(con, "salad", "demand-monitor", day)
     if rates is None and demand is None:
@@ -239,7 +249,7 @@ def build(con: Connection, day: str) -> str:
                           f"{r['work']}%" if r and r.get("work") is not None else "—",
                           d.get("demandTier", "—") if d else "—", d.get("utilizationPct", "—") if d else "—"])
         out += _table(["GPU", "Mean $/h", "P25–P75 $/h", "With a job", "Demand", "Utilization (undocumented)"], table)
-    return "\n".join(out)
+    return out
 
 
 def main() -> int:
