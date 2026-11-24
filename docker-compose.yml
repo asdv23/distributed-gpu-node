@@ -12,6 +12,8 @@ services:
     command: >-
       sh -c 'while true; do
       python -m collectors.vast.collector;
+      python -m collectors.clore.collector;
+      python -m collectors.salad.collector;
       python -m analytics.market_report;
       sleep 3600; done'
     restart: unless-stopped

@@ -11,6 +11,7 @@ from collections import defaultdict
 from pathlib import Path
 from sqlite3 import Connection, Row
 
+from analytics.feeds import clore_servers, latest
 from analytics.pricing import machines_seen, p10_p50_p90
 from collectors.vast.collector import GPUS, SCOPES, SLICES, URL
 from database import connect
@@ -60,20 +61,22 @@ def build(con: Connection, day: str) -> str:
         seen[(m["gpu_name"], m["vram_gb"], m["scope"], bool(m["rentable"]))].append(m)
     names = {g: f"{g[0]} {g[1]}GB" if g[1] else g[0] for g in models}
 
-    out = [f"# Vast.ai GPU market — {day} (UTC)", ""]
-    if any(s["data_class"] == "simulated" for s in snaps):
-        out[0] = f"# SIMULATED — Vast.ai GPU market — {day} (UTC)"
+    classes = {s["data_class"] for s in snaps} | {c for (c,) in con.execute(
+        "SELECT DISTINCT data_class FROM market_feeds WHERE substr(run_id, 1, 10) = ?", (day,))}
+    out = [f"# GPU rental market — {day} (UTC)", ""]
+    if "simulated" in classes:
+        out[0] = f"# SIMULATED — GPU rental market — {day} (UTC)"
         out += ["> **SIMULATED DATA. Not market data; do not cite.**", ""]
     out += [
-        "Listings and listed prices seen in the Vast.ai public search API; the data classes are in the",
-        "table below. The searches are sampled (§1), so counts are lower bounds. Nothing here is a rental",
-        "rate, an occupancy rate or host revenue.",
+        "Sections 1-9: listings and listed prices seen in the Vast.ai public search API. They are not",
+        "rentals, and the searches are sampled (§1), so counts are lower bounds. §10: rentals and host",
+        "earnings as Clore.ai and Salad publish them in public feeds. Data classes are in the table below.",
         "",
         *_table(["Item", "Value"], [
             ["Collection runs", f"{len(runs)} ({runs[0]['run_id']} … {runs[-1]['run_id']}); a run belongs to "
                                 "the UTC day it started"],
             ["Searches stored", f"{len(snaps)} of {planned} planned"],
-            ["Data classes", ", ".join(sorted({s["data_class"] for s in snaps})) or "—"],
+            ["Data classes", ", ".join(sorted(classes)) or "—"],
             ["Auth", ", ".join(sorted({s['auth'] for s in snaps})) or "—"],
             ["Endpoint", f"`POST {URL}` (request shape of the official vastai CLI)"],
             ["Price", "on-demand listed GPU price (`dph_base` ÷ GPUs in the offer), USD per GPU-hour"],
@@ -194,6 +197,48 @@ def build(con: Connection, day: str) -> str:
             "- **[assumption]** Round-the-clock load wears consumer cards (fans, thermal pads, memory",
             "  temperature on the RTX 3090). Depreciation is tracked apart from operating cash flow.",
             ""]
+
+    out += ["## 10. Other marketplaces: Clore.ai and Salad (public feeds)", ""]
+    rows, clore_runs, mixed = clore_servers(con, day, GPUS)
+    if not clore_runs:
+        out += ["Clore.ai: no download on this day.", ""]
+    else:
+        out += [f"**Clore.ai**, public server list, {clore_runs} download(s). A GPU counts as rented when the feed marks",
+                "its server rented. That is per whole server and partial rentals do not show, so read it as a lower",
+                f"bound. Servers that mix GPU models are left out ({mixed} in the last download). Price: on-demand USD",
+                "per server per day ÷ 24 ÷ GPUs (official doc).", ""]
+        by_model: dict[str, list[tuple]] = defaultdict(list)
+        for r in rows:
+            by_model[r[0]].append(r)
+        table = []
+        for model in sorted(by_model, key=lambda m: (GPUS.index(m.rsplit(" ", 1)[0]), int(m.rsplit(" ", 1)[1][:-2]))):
+            ms = by_model[model]
+            cn = [r for r in ms if r[2] == "CN"]
+            gpus, cn_gpus = sum(r[1] for r in ms), sum(r[1] for r in cn)
+            p_all = p10_p50_p90([r[4] for r in ms if r[4] is not None])
+            p_rented = p10_p50_p90([r[4] for r in ms if r[3] and r[4] is not None])
+            table.append([model, f"{gpus / clore_runs:.0f}", f"{sum(r[1] for r in ms if r[3]) / gpus:.0%}",
+                          f"{cn_gpus / clore_runs:.0f}", f"{sum(r[1] for r in cn if r[3]) / cn_gpus:.0%}" if cn_gpus else "—",
+                          _usd(p_all[1]) if p_all else "—", _usd(p_rented[1]) if p_rented else "—"])
+        out += _table(["Model", "GPUs listed (avg)", "Share rented", "CN GPUs (avg)", "CN share rented",
+                       "P50 $/GPU-h, all", "P50 $/GPU-h, rented"], table)
+
+    rates, demand = latest(con, "salad", "earning-rates", day), latest(con, "salad", "demand-monitor", day)
+    if rates is None and demand is None:
+        out += ["Salad: no download on this day.", ""]
+    else:
+        window = rates.get("window", {}) if rates else {}
+        out += [f"**Salad**, published host earnings ({window.get('from', '?')} to {window.get('to', '?')}): USD per hour,",
+                "idle time included. \"With a job\" is Salad's share of time a node had work. The demand monitor's",
+                "utilization figure is undocumented. Salad does not split memory variants.", ""]
+        table = []
+        for gpu in GPUS:
+            r = next((c for c in (rates or {}).get("classes", []) if c.get("name") == gpu), None)
+            d = next((x for x in demand or [] if x.get("name") == f"NVIDIA GeForce {gpu}"), None)
+            table.append([gpu, _usd(r.get("mean")) if r else "—", f"{_usd(r.get('p25'))}–{_usd(r.get('p75'))}" if r else "—",
+                          f"{r['work']}%" if r and r.get("work") is not None else "—",
+                          d.get("demandTier", "—") if d else "—", d.get("utilizationPct", "—") if d else "—"])
+        out += _table(["GPU", "Mean $/h", "P25–P75 $/h", "With a job", "Demand", "Utilization (undocumented)"], table)
     return "\n".join(out)
 
 

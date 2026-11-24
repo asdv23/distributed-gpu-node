@@ -11,6 +11,10 @@
   used to enumerate the global market around the result limit.
 - Respect rate limits and quotas: requests at least 2 s apart, bounded retries with backoff, and
   an immediate stop on Vast.ai's `search_quota_exceeded`.
+- Clore.ai's server list and Salad's earning rates and demand monitor are public feeds that need
+  no login (Clore's docs call the listing public). Each is downloaded once per hour, under the
+  plain client name `gpu-market-collector/0.1`. That name identifies no project or person and
+  imitates no browser. Clore owner IDs stay in the local database, like Vast host IDs.
 - Vast.ai's docs say every endpoint needs an API key. Search works without one, as it does in the
   official CLI, and the first batch was collected that way. Once a key exists, the collector sends
   it (`VAST_API_KEY`).

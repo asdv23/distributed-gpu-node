@@ -45,6 +45,11 @@ to the VPS over the private overlay network. Nothing on either machine exposes S
    per machine and slice. `analytics/market_report.py` renders `reports/market/YYYY-MM-DD.md` from
    those rows.
 
+4. `collectors/clore` and `collectors/salad` download public whole-market feeds in the same hourly
+   job: Clore.ai's server list, and Salad's earning rates and demand monitor. They are stored as
+   served (`market_feeds`, gzip). Report §10 parses them, so its figures are recomputable. These
+   feeds show rentals and host earnings as the platforms publish them.
+
 Two platform properties shape this design (details in [platform-research.md](platform-research.md)):
 
 - **Searches are sampled** (measured 2026-11-23). Identical searches return different subsets of the
@@ -90,8 +95,9 @@ Rules:
 ## Storage
 
 SQLite (`database/schema.sql`) is applied idempotently on every connect. Once a deployed database
-holds data, changes ship as numbered scripts in `database/migrations/`. Volume measured on the first
-run: about 0.4 MB per run, so about 10 MB a day and under 4 GB a year at one run per hour.
+holds data, changes ship as numbered scripts in `database/migrations/`. Measured volume: about
+0.4 MB per Vast run and 0.46 MB per Clore.ai download, so about 21 MB a day and under 8 GB a year
+at one run per hour.
 PostgreSQL becomes worthwhile when several writers or the dashboard need concurrent access.
 
 ## Scheduler (Sprint 6, design constraints)

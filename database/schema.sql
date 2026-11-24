@@ -70,6 +70,22 @@ CREATE TABLE IF NOT EXISTS market_offers (
     PRIMARY KEY (snapshot_id, offer_id)
 );
 
+-- One row per download of a public, no-login feed that covers a whole market or a platform's own
+-- published figures (Clore.ai server list, Salad earning rates and demand monitor), kept exactly as
+-- served. analytics/feeds.py parses them; runs are recorded in market_runs like Vast's.
+CREATE TABLE IF NOT EXISTS market_feeds (
+    id           INTEGER PRIMARY KEY,
+    platform     TEXT    NOT NULL,              -- 'clore' | 'salad'
+    feed         TEXT    NOT NULL,              -- key of FEEDS in the platform's collector
+    run_id       TEXT    NOT NULL,              -- UTC start of the run, 'YYYY-MM-DDTHH:MM:SSZ'
+    collected_at TEXT    NOT NULL,
+    url          TEXT    NOT NULL,
+    raw_gzip     BLOB    NOT NULL,              -- gzip(response body)
+    data_class   TEXT    NOT NULL DEFAULT 'collected' CHECK (data_class IN
+                 ('verified', 'official_doc', 'collected', 'third_party', 'estimate', 'assumption', 'simulated'))
+);
+CREATE INDEX IF NOT EXISTS market_feeds_run ON market_feeds (platform, feed, run_id);
+
 -- ------------------------------------------ own hosts, rentals and money (Phase 2-3, Sprint 4)
 -- Metric definitions these tables serve (docs/architecture.md#metrics):
 --   Online Rate            = online hours / calendar hours
